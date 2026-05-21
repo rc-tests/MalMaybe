@@ -151,6 +151,7 @@ MalMaybe_agent.exe
   PID=4321  TID=8765  Type=MEM_PRIVATE  Protect=EXECUTE_READWRITE
 ```
 
+![Screenshot from Console](alert.png)
 
 ## Architecture: Kernel ↔ User IPC
 
