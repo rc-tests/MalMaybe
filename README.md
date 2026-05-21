@@ -150,8 +150,11 @@ MalMaybe_agent.exe
   *** INJECTION DETECTED ***  Non-image executable thread start address.
   PID=4321  TID=8765  Type=MEM_PRIVATE  Protect=EXECUTE_READWRITE
 ```
+<p align="center">
+  <img width="1022" height="853" alt="alert" src="alert.PNG" />
+</p>
 
-![Screenshot from Console](alert.png)
+
 
 ## Architecture: Kernel ↔ User IPC
 
