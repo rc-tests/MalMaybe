@@ -43,16 +43,6 @@ All three must be true simultaneously to fire an alert. This catches the classic
 
 ---
 
-## Project Structure
-
-```
-MalMaybe/
-├── MalMaybe.c           # Kernel-mode driver (WDM) — MalMaybe.sys
-├── MalMaybe_agent.c     # User-mode console agent — MalMaybe.exe
-├── MalMaybe_ipc.h       # Shared IPC definitions (IOCTL, event struct)
-└── README.md
-```
-
 ### Component Summary
 
 | File | Role |
