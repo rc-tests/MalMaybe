@@ -1,21 +1,21 @@
-# malmaybe
+# MalMaybe
 
 > **Kernel-level process injection detection for Windows — research & lab use only.**
 
-malmaybe is a Windows kernel-mode driver (`malmaybe.sys`) paired with a user-mode agent (`malmaybe.exe`) that detects process injection attacks in real time. The driver hooks into the Windows kernel's thread-creation notification system and inspects the memory region of every new thread's start address before it executes a single instruction. Suspicious threads — those starting in private, executable, non-image-backed memory — are flagged and streamed to the agent for display and logging.
+MalMaybe is a Windows kernel-mode driver (`MalMaybe.sys`) paired with a user-mode agent (`MalMaybe.exe`) that detects process injection attacks in real time. The driver hooks into the Windows kernel's thread-creation notification system and inspects the memory region of every new thread's start address before it executes a single instruction. Suspicious threads — those starting in private, executable, non-image-backed memory — are flagged and streamed to the agent for display and logging.
 
 ---
 
 ## How It Works
 
-When any program on the system creates a new thread, Windows calls malmaybe's registered callback (`PsSetCreateThreadNotifyRoutine`) before the thread runs. The driver then:
+When any program on the system creates a new thread, Windows calls MalMaybe's registered callback (`PsSetCreateThreadNotifyRoutine`) before the thread runs. The driver then:
 
 1. Reads the thread's **Win32 start address** — where the thread will actually begin executing
 2. Queries the **memory type** at that address using `ZwQueryVirtualMemory`
 3. Checks the **page protection flags** — is the memory executable?
 4. If the memory is committed, not backed by a PE image on disk, and executable → **alert fired**
 
-Events are placed in a kernel ring buffer and streamed to the agent via a custom IOCTL over a named device object (`\\.\malmaybe`). The agent prints colour-coded output to the console and appends all events to `C:\malmaybe.log`.
+Events are placed in a kernel ring buffer and streamed to the agent via a custom IOCTL over a named device object (`\\.\MalMaybe`). The agent prints colour-coded output to the console and appends all events to `C:\MalMaybe.log`.
 
 ```
 New thread created anywhere on system
@@ -46,10 +46,10 @@ All three must be true simultaneously to fire an alert. This catches the classic
 ## Project Structure
 
 ```
-malmaybe/
-├── malmaybe.c           # Kernel-mode driver (WDM) — malmaybe.sys
-├── malmaybe_agent.c     # User-mode console agent — malmaybe.exe
-├── malmaybe_ipc.h       # Shared IPC definitions (IOCTL, event struct)
+MalMaybe/
+├── MalMaybe.c           # Kernel-mode driver (WDM) — MalMaybe.sys
+├── MalMaybe_agent.c     # User-mode console agent — MalMaybe.exe
+├── MalMaybe_ipc.h       # Shared IPC definitions (IOCTL, event struct)
 └── README.md
 ```
 
@@ -57,9 +57,9 @@ malmaybe/
 
 | File | Role |
 |---|---|
-| `malmaybe.c` | Kernel driver. Registers thread-create callback, maintains ring buffer, exposes `\\.\malmaybe` device, streams events via IOCTL |
-| `malmaybe_agent.c` | User-mode agent. Opens the device, blocks on IOCTL until events arrive, prints colour-coded output, writes `C:\malmaybe.log` |
-| `malmaybe_ipc.h` | Shared header. Defines `MALMAYBE_EVENT` struct, IOCTL code, and flag constants — must be consistent between both projects |
+| `MalMaybe.c` | Kernel driver. Registers thread-create callback, maintains ring buffer, exposes `\\.\MalMaybe` device, streams events via IOCTL |
+| `MalMaybe_agent.c` | User-mode agent. Opens the device, blocks on IOCTL until events arrive, prints colour-coded output, writes `C:\MalMaybe.log` |
+| `MalMaybe_ipc.h` | Shared header. Defines `MalMaybe_EVENT` struct, IOCTL code, and flag constants — must be consistent between both projects |
 
 ---
 
@@ -81,12 +81,12 @@ malmaybe/
 
 ### Build Requirements
 
-**Driver (`malmaybe.sys`):**
+**Driver (`MalMaybe.sys`):**
 - Visual Studio 2022
 - Windows Driver Kit (WDK) matching your VS version
 - Target: Windows 11, x64, Release
 
-**Agent (`malmaybe.exe`):**
+**Agent (`MalMaybe.exe`):**
 - Any C compiler with Win32 headers
 - Recommended: Build Tools for Visual Studio 2022
 
@@ -97,10 +97,10 @@ malmaybe/
 ### Driver
 
 1. Open the WDK kernel-mode driver project in Visual Studio
-2. Add `malmaybe.c` and `malmaybe_ipc.h` to the project
+2. Add `MalMaybe.c` and `MalMaybe_ipc.h` to the project
 3. Set configuration to **Release / x64**
 4. In **Project Properties → Inf2Cat → Run Inf2Cat** → set to **No** (not needed for lab use)
-5. Build → produces `malmaybe.sys`
+5. Build → produces `MalMaybe.sys`
 
 ### Agent (compile on the VM)
 
@@ -109,12 +109,12 @@ Install [Build Tools for Visual Studio 2022](https://aka.ms/vs/17/release/vs_Bui
 Open **Developer Command Prompt for VS 2022** as Administrator:
 
 ```cmd
-cd C:\malmaybe
+cd C:\MalMaybe
 
-cl /W4 /O2 /MT /nologo malmaybe_agent.c /link /SUBSYSTEM:CONSOLE kernel32.lib user32.lib
+cl /W4 /O2 /MT /nologo MalMaybe_agent.c /link /SUBSYSTEM:CONSOLE kernel32.lib user32.lib
 ```
 
-This produces a fully self-contained `malmaybe_agent.exe` with no DLL dependencies.
+This produces a fully self-contained `MalMaybe_agent.exe` with no DLL dependencies.
 
 ---
 
@@ -122,8 +122,8 @@ This produces a fully self-contained `malmaybe_agent.exe` with no DLL dependenci
 
 Copy to the test VM:
 ```
-malmaybe.sys
-malmaybe_agent.exe
+MalMaybe.sys
+MalMaybe_agent.exe
 ```
 
 **Order of operations:**
@@ -144,12 +144,12 @@ malmaybe_agent.exe
 
 ```
 ╔══════════════════════════════════════════════════════╗
-║              malmaybe  —  Agent v2.0                 ║
+║              MalMaybe  —  Agent v2.0                 ║
 ║     Kernel-Level Process Injection Detection         ║
 ╚══════════════════════════════════════════════════════╝
 
-  Device  : \\.\malmaybe
-  Log     : C:\malmaybe.log
+  Device  : \\.\MalMaybe
+  Log     : C:\MalMaybe.log
 
 [2025-01-01 12:00:01] [info ] #1      PID=1234    TID=5678    Start=0x00007FF6A1B20000
                                 Type=MEM_IMAGE       Protect=EXECUTE_READ          State=COMMIT
@@ -164,11 +164,11 @@ malmaybe_agent.exe
 
 ## Architecture: Kernel ↔ User IPC
 
-The driver and agent communicate through a custom device and IOCTL, defined in `malmaybe_ipc.h`.
+The driver and agent communicate through a custom device and IOCTL, defined in `MalMaybe_ipc.h`.
 
 ```
 ┌─────────────────────────────────────┐
-│           malmaybe.sys              │  KERNEL MODE
+│           MalMaybe.sys              │  KERNEL MODE
 │                                     │
 │  ThreadNotify callback              │
 │       │                             │
@@ -177,25 +177,25 @@ The driver and agent communicate through a custom device and IOCTL, defined in `
 │  (KSPIN_LOCK protected)             │
 │       │                             │
 │       ▼                             │
-│  \\Device\\malmaybe                 │
-│  IOCTL_MALMAYBE_READ_EVENTS         │
+│  \\Device\\MalMaybe                 │
+│  IOCTL_MalMaybe_READ_EVENTS         │
 └──────────────┬──────────────────────┘
                │  DeviceIoControl (blocking)
 ┌──────────────▼──────────────────────┐
-│          malmaybe.exe               │  USER MODE
+│          MalMaybe.exe               │  USER MODE
 │                                     │
 │  Blocking IOCTL loop                │
 │  (zero CPU when idle)               │
 │       │                             │
 │       ├─► Colour-coded console      │
-│       └─► C:\malmaybe.log           │
+│       └─► C:\MalMaybe.log           │
 └─────────────────────────────────────┘
 ```
 
 **Key design properties:**
 - The IOCTL **blocks** when the ring is empty — zero CPU usage while idle, no polling
 - The ring buffer holds 256 events; oldest are overwritten if the agent falls behind
-- Access to `\\.\malmaybe` requires Administrator — enforced by the device ACL
+- Access to `\\.\MalMaybe` requires Administrator — enforced by the device ACL
 - The driver handles agent crashes gracefully via `IRP_MJ_CLEANUP`
 
 ---
