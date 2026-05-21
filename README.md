@@ -1,21 +1,21 @@
-# MalMaybe
+# malmaybe
 
-> **Kernel-level process injection detection for Live Windows Machine — research & lab use only.**
+> **Kernel-level process injection detection for Windows — research & lab use only.**
 
-MalMaybe is a Windows kernel-mode driver (`MalMaybe.sys`) paired with a user-mode agent (`MalMaybe.exe`) that detects process injection attacks in real time. The driver hooks into the Windows kernel's thread-creation notification system and inspects the memory region of every new thread's start address before it executes a single instruction. Suspicious threads — those starting in private, executable, non-image-backed memory — are flagged and streamed to the agent for display and logging.
+malmaybe is a Windows kernel-mode driver (`malmaybe.sys`) paired with a user-mode agent (`malmaybe.exe`) that detects process injection attacks in real time. The driver hooks into the Windows kernel's thread-creation notification system and inspects the memory region of every new thread's start address before it executes a single instruction. Suspicious threads — those starting in private, executable, non-image-backed memory — are flagged and streamed to the agent for display and logging.
 
 ---
 
 ## How It Works
 
-When any program on the system creates a new thread, Windows calls MalMaybe's registered callback (`PsSetCreateThreadNotifyRoutine`) before the thread runs. The driver then:
+When any program on the system creates a new thread, Windows calls malmaybe's registered callback (`PsSetCreateThreadNotifyRoutine`) before the thread runs. The driver then:
 
 1. Reads the thread's **Win32 start address** — where the thread will actually begin executing
 2. Queries the **memory type** at that address using `ZwQueryVirtualMemory`
 3. Checks the **page protection flags** — is the memory executable?
 4. If the memory is committed, not backed by a PE image on disk, and executable → **alert fired**
 
-Events are placed in a kernel ring buffer and streamed to the agent via a custom IOCTL over a named device object (`\\.\MalMaybe`). The agent prints colour-coded output to the console and appends all events to `C:\MalMaybe.log`.
+Events are placed in a kernel ring buffer and streamed to the agent via a custom IOCTL over a named device object (`\\.\malmaybe`). The agent prints colour-coded output to the console and appends all events to `C:\malmaybe.log`.
 
 ```
 New thread created anywhere on system
@@ -43,15 +43,23 @@ All three must be true simultaneously to fire an alert. This catches the classic
 
 ---
 
+## Project Structure
+
+```
+malmaybe/
+├── malmaybe.c           # Kernel-mode driver (WDM) — malmaybe.sys
+├── malmaybe_agent.c     # User-mode console agent — malmaybe.exe
+├── malmaybe_ipc.h       # Shared IPC definitions (IOCTL, event struct)
+└── README.md
 ```
 
 ### Component Summary
 
 | File | Role |
 |---|---|
-| `MalMaybe.c` | Kernel driver. Registers thread-create callback, maintains ring buffer, exposes `\\.\MalMaybe` device, streams events via IOCTL |
-| `MalMaybe_agent.c` | User-mode agent. Opens the device, blocks on IOCTL until events arrive, prints colour-coded output, writes `C:\MalMaybe.log` |
-| `MalMaybe_ipc.h` | Shared header. Defines `MalMaybe_EVENT` struct, IOCTL code, and flag constants — must be consistent between both projects |
+| `malmaybe.c` | Kernel driver. Registers thread-create callback, maintains ring buffer, exposes `\\.\malmaybe` device, streams events via IOCTL |
+| `malmaybe_agent.c` | User-mode agent. Opens the device, blocks on IOCTL until events arrive, prints colour-coded output, writes `C:\malmaybe.log` |
+| `malmaybe_ipc.h` | Shared header. Defines `MALMAYBE_EVENT` struct, IOCTL code, and flag constants — must be consistent between both projects |
 
 ---
 
@@ -59,30 +67,28 @@ All three must be true simultaneously to fire an alert. This catches the classic
 
 | Injection Technique | Detected | Notes |
 |---|---|---|
-| Classic shellcode (VirtualAllocEx + CreateRemoteThread) | Yes | Primary target — MEM_PRIVATE + executable start address |
-| Reflective DLL injection | Partial | Detected if loader starts in private memory |
-| APC injection | No | No new thread created |
-| Thread hijacking (SetThreadContext) | No | Hijacks existing thread |
-| Module stomping | No | Retains MEM_IMAGE type, bypasses heuristic |
-| Process hollowing | No | Main thread resumes, no remote thread |
-| Process Doppelgänging | No | Requires additional kernel signals |
+| Classic shellcode (VirtualAllocEx + CreateRemoteThread) |  Yes | Primary target — MEM_PRIVATE + executable start address |
+| Reflective DLL injection |  Partial | Detected if loader starts in private memory |
+| APC injection |  No | No new thread created |
+| Thread hijacking (SetThreadContext) |  No | Hijacks existing thread |
+| Module stomping |  No | Retains MEM_IMAGE type, bypasses heuristic |
+| Process hollowing |  No | Main thread resumes, no remote thread |
+| Process Doppelgänging |  No | Requires additional kernel signals |
 
 ---
 
 ## Requirements
 
-Test Windows Machine (tested on 11) with Debugging and Testsigning ON
-
 ### Build Requirements
 
-**Driver (`MalMaybe.sys`):**
+**Driver (`malmaybe.sys`):**
 - Visual Studio 2022
 - Windows Driver Kit (WDK) matching your VS version
 - Target: Windows 11, x64, Release
 
-**Agent (`MalMaybe.exe`):**
+**Agent (`malmaybe.exe`):**
 - Any C compiler with Win32 headers
-- Recommended: Build Tools for Visual Studio 2022, Developer Command Prompt
+- Recommended: Build Tools for Visual Studio 2022
 
 ---
 
@@ -91,10 +97,10 @@ Test Windows Machine (tested on 11) with Debugging and Testsigning ON
 ### Driver
 
 1. Open the WDK kernel-mode driver project in Visual Studio
-2. Add `MalMaybe.c` and `MalMaybe_ipc.h` to the project
+2. Add `malmaybe.c` and `malmaybe_ipc.h` to the project
 3. Set configuration to **Release / x64**
 4. In **Project Properties → Inf2Cat → Run Inf2Cat** → set to **No** (not needed for lab use)
-5. Build → produces `MalMaybe.sys`
+5. Build → produces `malmaybe.sys`
 
 ### Agent (compile on the VM)
 
@@ -103,14 +109,12 @@ Install [Build Tools for Visual Studio 2022](https://aka.ms/vs/17/release/vs_Bui
 Open **Developer Command Prompt for VS 2022** as Administrator:
 
 ```cmd
-cd C:\MalMaybe
+cd C:\malmaybe
 
-cl /W4 /O2 /MT /nologo MalMaybe_agent.c /link /SUBSYSTEM:CONSOLE kernel32.lib user32.lib
-
-You can edit agent code add path where you want the log to be saved
+cl /W4 /O2 /MT /nologo malmaybe_agent.c /link /SUBSYSTEM:CONSOLE kernel32.lib user32.lib
 ```
 
-This produces a fully self-contained `MalMaybe_agent.exe` with no DLL dependencies.
+This produces a fully self-contained `malmaybe_agent.exe` with no DLL dependencies.
 
 ---
 
@@ -118,8 +122,8 @@ This produces a fully self-contained `MalMaybe_agent.exe` with no DLL dependenci
 
 Copy to the test VM:
 ```
-MalMaybe.sys
-MalMaybe_agent.exe
+malmaybe.sys
+malmaybe_agent.exe
 ```
 
 **Order of operations:**
@@ -128,24 +132,24 @@ MalMaybe_agent.exe
 1.  Make VM:       Will require bigger RAM and DISK, Recommended to increase from Default values
 2.  Decrypt Device:Windows 11 Bitlocker Encryption is ON by deafult. Turn OFF
 3.  Secure Boot:   Turn OFF Secure Boot. 
-1.  Load driver:   OSRLoader → select MalMaybe.sys → Register Service → Start Service
-2.  Run agent:     Open Administrator cmd → MalMaybe_agent.exe
-3.  Simulate:      Run your injection code
-4.  Observe:       Alerts appear live in the agent console
-5.  Review log:    C:\MalMaybe.log contains all events
-6.  Unload driver: OSRLoader → Stop Service
+4.  Load driver:   OSRLoader → select MalMaybe.sys → Register Service → Start Service
+5.  Run agent:     Open Administrator cmd → MalMaybe_agent.exe
+6.  Simulate:      Run your injection code
+7.  Observe:       Alerts appear live in the agent console
+8.  Review log:    C:\MalMaybe.log contains all events
+9.  Unload driver: OSRLoader → Stop Service
 ```
 
 ### Expected Agent Output
 
 ```
 ╔══════════════════════════════════════════════════════╗
-║              MalMaybe  —  Agent v2.0                 ║
+║              malmaybe  —  Agent v2.0                 ║
 ║     Kernel-Level Process Injection Detection         ║
 ╚══════════════════════════════════════════════════════╝
 
-  Device  : \\.\MalMaybe
-  Log     : C:\MalMaybe.log
+  Device  : \\.\malmaybe
+  Log     : C:\malmaybe.log
 
 [2025-01-01 12:00:01] [info ] #1      PID=1234    TID=5678    Start=0x00007FF6A1B20000
                                 Type=MEM_IMAGE       Protect=EXECUTE_READ          State=COMMIT
@@ -157,17 +161,14 @@ MalMaybe_agent.exe
   PID=4321  TID=8765  Type=MEM_PRIVATE  Protect=EXECUTE_READWRITE
 ```
 
-### Simulating Injection (NOP Shellcode Test)
-
-Simulate using NOP (`0x90`) shellcode for Safety and Educational purpose. Or do whatever idc its not my responsibility.
 
 ## Architecture: Kernel ↔ User IPC
 
-The driver and agent communicate through a custom device and IOCTL, defined in `MalMaybe_ipc.h`.
+The driver and agent communicate through a custom device and IOCTL, defined in `malmaybe_ipc.h`.
 
 ```
 ┌─────────────────────────────────────┐
-│           MalMaybe.sys              │  KERNEL MODE
+│           malmaybe.sys              │  KERNEL MODE
 │                                     │
 │  ThreadNotify callback              │
 │       │                             │
@@ -176,43 +177,42 @@ The driver and agent communicate through a custom device and IOCTL, defined in `
 │  (KSPIN_LOCK protected)             │
 │       │                             │
 │       ▼                             │
-│  \\Device\\MalMaybe                 │
-│  IOCTL_MalMaybe_READ_EVENTS         │
+│  \\Device\\malmaybe                 │
+│  IOCTL_MALMAYBE_READ_EVENTS         │
 └──────────────┬──────────────────────┘
                │  DeviceIoControl (blocking)
 ┌──────────────▼──────────────────────┐
-│          MalMaybe.exe               │  USER MODE
+│          malmaybe.exe               │  USER MODE
 │                                     │
 │  Blocking IOCTL loop                │
 │  (zero CPU when idle)               │
 │       │                             │
 │       ├─► Colour-coded console      │
-│       └─► C:\MalMaybe.log           │
+│       └─► C:\malmaybe.log           │
 └─────────────────────────────────────┘
 ```
 
 **Key design properties:**
 - The IOCTL **blocks** when the ring is empty — zero CPU usage while idle, no polling
 - The ring buffer holds 256 events; oldest are overwritten if the agent falls behind
-- Access to `\\.\MalMaybe` requires Administrator — enforced by the device ACL
+- Access to `\\.\malmaybe` requires Administrator — enforced by the device ACL
 - The driver handles agent crashes gracefully via `IRP_MJ_CLEANUP`
 
 ---
 
 ## Known Limitations
 
-- **Detection scope:** Only catches injection techniques that create a new thread with a non-image start address. Techniques that reuse existing threads
-- (APC injection, thread hijacking) or maintain image-type memory (module stomping) are not detected.
+- **Detection scope:** Only catches injection techniques that create a new thread with a non-image start address. Techniques that reuse existing threads (APC injection, thread hijacking) or maintain image-type memory (module stomping) are not detected.
 - **False positives:** JIT compilers (.NET CLR, V8, LuaJIT) legitimately create threads in private executable memory.
-- **No kernel signature:** Requires TestSigning mode. Will not load on a standard consumer or enterprise Windows machine without WHQL signing & Microsoft
-- charges money for that so nope
+- **No kernel signature:** Requires TestSigning mode. Will not load on a standard consumer or enterprise Windows machine without WHQL signing & Microsoft charges money for that so nope
 - **Single consumer:** The device is designed for one agent at a time.
-
 ---
 
 ## Future Roadmap
 
+
 Detect More Injections, Make WhiteList for legit Software that trigger flags and Licensing - Make a Distributable Software Basically
+
 ---
 
 ## Disclaimer
@@ -221,14 +221,6 @@ Detect More Injections, Make WhiteList for legit Software that trigger flags and
 >
 > Loading unsigned kernel drivers requires disabling Windows security features (Secure Boot, TestSigning). Do this only inside a dedicated virtual machine.
 >
-> I accept no responsibility for misuse. I dont get paid for this shit
+> The authors accept no responsibility for misuse.
 
 ---
-
-## References
-
-- [PsSetCreateThreadNotifyRoutine — Microsoft Docs](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreatethreadnotifyroutine)
-- [ZwQueryVirtualMemory — NT DDK Reference](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/)
-- [Windows Internals, 7th Edition — Yosifovich, Ionescu et al.](https://docs.microsoft.com/en-us/sysinternals/resources/windows-internals)
-- [OSRLoader — Open Systems Resources](https://www.osronline.com/article.cfm%5Earticle=157.htm)
-- [DebugView — Sysinternals](https://docs.microsoft.com/en-us/sysinternals/downloads/debugview)
