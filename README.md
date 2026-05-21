@@ -209,8 +209,8 @@ Detect More Injections, Make WhiteList for legit Software that trigger flags and
 
 > This project is intended **strictly for security research, education, and testing on systems you own or have explicit written authorisation to test.**
 >
-> Loading unsigned kernel drivers requires disabling Windows security features (Secure Boot, TestSigning). Do this only inside a dedicated virtual machine.
+> Loading unsigned kernel drivers requires disabling Windows security features (Secure Boot, TestSigning). Do this only inside a virtual machine istg.
 >
-> The authors accept no responsibility for misuse.
+> I accept no responsibility for misuse. I dont get paid & idc.
 
 ---
